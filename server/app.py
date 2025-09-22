@@ -25,56 +25,55 @@ def index():
     return "<h1>Code challenge</h1>"
 
 
-from flask_restful import Resource
-from flask import jsonify, request, make_response
-
-class RestaurantsList(Resource):
+class Restaurants(Resource):
     def get(self):
         restaurants = Restaurant.query.all()
-        return jsonify([restaurant.to_dict(only=("id", "name", "address")) for restaurant in restaurants])
+        return [restaurant.to_dict(only=('id', 'name', 'address')) for restaurant in restaurants]
 
-class RestaurantDetail(Resource):
+
+class RestaurantByID(Resource):
     def get(self, id):
-        restaurant = Restaurant.query.get(id)
-        if restaurant:
-            return jsonify(restaurant.to_dict())
-        else:
-            return make_response(jsonify({"error": "Restaurant not found"}), 404)
-
+        restaurant = Restaurant.query.filter_by(id=id).first()
+        if not restaurant:
+            return {'error': 'Restaurant not found'}, 404
+        return restaurant.to_dict(only=('id', 'name', 'address', 'restaurant_pizzas.id', 'restaurant_pizzas.price', 'restaurant_pizzas.pizza_id', 'restaurant_pizzas.restaurant_id', 'restaurant_pizzas.pizza.id', 'restaurant_pizzas.pizza.name', 'restaurant_pizzas.pizza.ingredients'))
+    
     def delete(self, id):
-        restaurant = Restaurant.query.get(id)
-        if restaurant:
-            db.session.delete(restaurant)
-            db.session.commit()
-            return make_response("", 204)
-        else:
-            return make_response(jsonify({"error": "Restaurant not found"}), 404)
+        restaurant = Restaurant.query.filter_by(id=id).first()
+        if not restaurant:
+            return {'error': 'Restaurant not found'}, 404
+        db.session.delete(restaurant)
+        db.session.commit()
+        return '', 204
 
-class PizzasList(Resource):
+
+class Pizzas(Resource):
     def get(self):
         pizzas = Pizza.query.all()
-        return jsonify([pizza.to_dict(only=("id", "name", "ingredients")) for pizza in pizzas])
+        return [pizza.to_dict(only=('id', 'name', 'ingredients')) for pizza in pizzas]
 
-class RestaurantPizzasCreate(Resource):
+
+class RestaurantPizzas(Resource):
     def post(self):
         data = request.get_json()
-        price = data.get("price")
-        pizza_id = data.get("pizza_id")
-        restaurant_id = data.get("restaurant_id")
-
         try:
-            restaurant_pizza = RestaurantPizza(price=price, pizza_id=pizza_id, restaurant_id=restaurant_id)
+            restaurant_pizza = RestaurantPizza(
+                price=data['price'],
+                pizza_id=data['pizza_id'],
+                restaurant_id=data['restaurant_id']
+            )
             db.session.add(restaurant_pizza)
             db.session.commit()
-            return make_response(jsonify(restaurant_pizza.to_dict()), 201)
-        except Exception:
-            db.session.rollback()
-            return make_response(jsonify({"errors": ["validation errors"]}), 400)
+            return restaurant_pizza.to_dict(only=('id', 'price', 'pizza_id', 'restaurant_id', 'pizza.id', 'pizza.name', 'pizza.ingredients', 'restaurant.id', 'restaurant.name', 'restaurant.address')), 201
+        except (ValueError, Exception):
+            return {'errors': ['validation errors']}, 400
 
-api.add_resource(RestaurantsList, "/restaurants")
-api.add_resource(RestaurantDetail, "/restaurants/<int:id>")
-api.add_resource(PizzasList, "/pizzas")
-api.add_resource(RestaurantPizzasCreate, "/restaurant_pizzas")
+
+api.add_resource(Restaurants, '/restaurants')
+api.add_resource(RestaurantByID, '/restaurants/<int:id>')
+api.add_resource(Pizzas, '/pizzas')
+api.add_resource(RestaurantPizzas, '/restaurant_pizzas')
+
 
 if __name__ == "__main__":
     app.run(port=5555, debug=True)
